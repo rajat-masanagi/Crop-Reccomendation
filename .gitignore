@@ -1,0 +1,8 @@
+Backend/gis_data/
+Backend/market_data/
+Backend/output/
+Frontend/my-app/node_modules/
+.DS_Store
+__pycache__/
+*.py[cod]
+Backend/env/
