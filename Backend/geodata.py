@@ -297,7 +297,7 @@ def create_interactive_plots(df, output_file="weather.html"):
         margin=dict(l=50, r=50, t=50, b=50),
     )
     
-    output_folder = "/Users/admin/Workspace/Crop Reccomendation/Frontend/my-app/public"
+    output_folder = "output"
     os.makedirs(output_folder, exist_ok=True)
     
     output_path = os.path.join(output_folder, output_file)
@@ -336,6 +336,33 @@ def get_data():
     raster_values['avg_humidity'] = round(float(avg_humidity),2)
     raster_values['avg_rainfall'] = round(float(avg_rainfall),2)
     raster_values['weather_graph_path'] = weather_graph_path
+
+    # raster_values={
+    #     "avg_humidity": 51.68,
+    #     "avg_rainfall": 27.0,
+    #     "avg_temperature": 25.68,
+    #     "evapotranspiration": 1.9800000190734863,
+    #     "fallow": 55.4,
+    #     "filtered_ndvi": 73.0,
+    #     "global_ndvi": 161.0,
+    #     "inorganic_carbon_density": 0.53,
+    #     "kharif": 64.83,
+    #     "local_ndvi": 91.0,
+    #     "net_sown_area": 64.84,
+    #     "organic_carbon_density": 8.85,
+    #     "rabi": 49.95,
+    #     "root_level_surface_moisture": 0.09,
+    #     "salt_affected": 49.6,
+    #     "soil_depth": "25-50m",
+    #     "soil_type": "loamy",
+    #     "surface_runoff": 0.0,
+    #     "upper_level_surface_moisture": 0.1,
+    #     "vegetation_fraction": 84.0,
+    #     "water_erosion": 97.17,
+    #     "water_logging": 50.19,
+    #     "weather_graph_path": "weather.html",
+    #     "wind_erosion": 49.6
+    #     }
 
     return jsonify(raster_values)
 

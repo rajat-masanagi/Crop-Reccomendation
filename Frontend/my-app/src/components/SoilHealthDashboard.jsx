@@ -4,29 +4,29 @@ import {
   PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 import { Thermometer, Droplets, Wind, Lock, Clipboard, 
-  Layers, Sprout, Gauge, AlertTriangle, BookOpen } from 'lucide-react';
+  Layers, Sprout, Gauge, AlertTriangle, Brain } from 'lucide-react';
 
 export default function SoilHealthDashboard() {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [coordinates, setCoordinates] = useState({ lat: 18.8306, lon: 73.2846 });
+  const [coordinates, setCoordinates] = useState(null);
   const [inputCoordinates, setInputCoordinates] = useState({ lat: 18.8306, lon: 73.2846 });
   const [recommendations, setRecommendations] = useState(null);
-  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
   useEffect(() => {
-    fetchData(coordinates.lat, coordinates.lon);
-  }, [coordinates]);
-
-  useEffect(() => {
-    if (data) {
-      fetchCropRecommendations();
+    // Only fetch data if coordinates are not null
+    if (coordinates && coordinates.lat !== null && coordinates.lon !== null) {
+      fetchData(coordinates.lat, coordinates.lon);
     }
-  }, [data]);
+  }, [coordinates]);
 
   const fetchData = async (lat, lon) => {
     setLoading(true);
+    setRecommendations(null);
+    setAiError(null);
     try {
       const response = await fetch(`http://127.0.0.1:7000/get_data?lat=${lat}&lon=${lon}`);
       if (!response.ok) {
@@ -34,6 +34,9 @@ export default function SoilHealthDashboard() {
       }
       const jsonData = await response.json();
       setData(jsonData);
+      
+      // Auto-fetch recommendations when soil data is loaded
+      fetchCropRecommendations(jsonData);
     } catch (err) {
       setError('Failed to fetch data. Make sure the Flask server is running.');
       console.error('Error fetching data:', err);
@@ -42,60 +45,124 @@ export default function SoilHealthDashboard() {
     }
   };
 
-  // Simulated Gemini API call for crop recommendations
-  const fetchCropRecommendations = async () => {
-    setLoadingRecommendations(true);
+  const fetchCropRecommendations = async (soilData) => {
+    setAiLoading(true);
+    setAiError(null);
+    
     try {
-      // Simulating API call with setTimeout
-      setTimeout(() => {
-        // This is a simulated response that would come from Gemini API
-        const simulatedResponse = {
-          recommendedCrops: [
+      const apiKey =""; // Ensure you have your API key in .env file
+      if (!apiKey) {
+        throw new Error('Gemini API key not found. Please check your .env file.');
+      }
+      
+      // Prepare prompt for Gemini
+      const prompt = `
+        Analyze this soil data and provide crop recommendations with detailed insights:
+        
+        Soil Type: ${soilData.soil_type}
+        Soil Depth: ${soilData.soil_depth}
+        Organic Carbon Density: ${soilData.organic_carbon_density} kg/m³
+        Inorganic Carbon Density: ${soilData.inorganic_carbon_density} kg/m³
+        
+        Climate:
+        - Temperature: ${soilData.avg_temperature}°C
+        - Humidity: ${soilData.avg_humidity}%
+        - Rainfall: ${soilData.avg_rainfall}mm
+        
+        Soil Moisture:
+        - Root Level: ${soilData.root_level_surface_moisture * 100}%
+        - Upper Level: ${soilData.upper_level_surface_moisture * 100}%
+        - Surface Runoff: ${soilData.surface_runoff * 100}%
+        - Evapotranspiration: ${soilData.evapotranspiration}
+        
+        Soil Risks:
+        - Water Erosion Risk: ${soilData.water_erosion}%
+        - Wind Erosion Risk: ${soilData.wind_erosion}%
+        - Water Logging Risk: ${soilData.water_logging}%
+        - Salt Affected Level: ${soilData.salt_affected}%
+        
+        Vegetation Health:
+        - Local NDVI: ${soilData.local_ndvi}
+        - Global NDVI: ${soilData.global_ndvi}
+        - Filtered NDVI: ${soilData.filtered_ndvi}
+        - Vegetation Fraction: ${soilData.vegetation_fraction}%
+        
+        Current Cultivation:
+        - Kharif Crops: ${soilData.kharif}%
+        - Rabi Crops: ${soilData.rabi}%
+        - Fallow Land: ${soilData.fallow}%
+        - Net Sown Area: ${soilData.net_sown_area}%
+        
+        Based on this data, provide:
+        1. Top 3-5 recommended crops that would grow well in these conditions
+        2. For each crop, explain why it's suitable given the soil conditions
+        3. Farming practices recommended for this soil
+        4. Any soil improvements or treatments that might be beneficial
+        5. Risk factors to watch out for
+        
+        Format response as JSON with the following structure:
+        {
+          "recommendedCrops": [
             {
-              name: "Sorghum (Jowar)",
-              suitability: "High",
-              reason: "Thrives in loamy soil with moderate water requirements. Good for regions with water erosion risk.",
-              growingSeason: "Kharif"
-            },
-            {
-              name: "Pearl Millet (Bajra)",
-              suitability: "High",
-              reason: "Drought resistant and suited for regions with moderate rainfall and temperatures above 30°C.",
-              growingSeason: "Kharif"
-            },
-            {
-              name: "Chickpea (Gram)",
-              suitability: "Medium",
-              reason: "Works well in loamy soil with moderate depth. Helps in nitrogen fixation.",
-              growingSeason: "Rabi"
-            },
-            {
-              name: "Pigeon Pea (Tur Dal)",
-              suitability: "High",
-              reason: "Thrives in loamy soil with moderate water needs and tolerates high temperatures.",
-              growingSeason: "Kharif"
-            },
-            {
-              name: "Cotton",
-              suitability: "Medium",
-              reason: "Suitable for loamy soil but requires good drainage. Consider the water erosion risk.",
-              growingSeason: "Kharif to Rabi"
+              "name": "crop name",
+              "suitability": "high/medium/low",
+              "reasons": ["reason 1", "reason 2"]
             }
           ],
-          soilHealthImprovements: [
-            "Consider crop rotation to improve soil organic matter",
-            "Implement contour farming to reduce water erosion",
-            "Add organic mulch to improve water retention",
-            "Use cover crops during fallow periods"
-          ]
-        };
-        
-        setRecommendations(simulatedResponse);
-        setLoadingRecommendations(false);
-      }, 1500);
+          "farmingPractices": ["practice 1", "practice 2"],
+          "soilImprovements": ["improvement 1", "improvement 2"],
+          "riskFactors": ["risk 1", "risk 2"],
+          "insights": "overall analysis and additional insights"
+        }
+      `;
+
+      // Call Gemini API
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Gemini API error: ${errorData.error?.message || 'Unknown error'}`);
+      }
+
+      const result = await response.json();
+      
+      // Extract the JSON response from Gemini's text response
+      const textResponse = result.candidates[0].content.parts[0].text;
+      let jsonResponse;
+      
+      // Parse the JSON from the text response
+      try {
+        // Extract JSON object from text (in case Gemini adds explanatory text before/after)
+        const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonResponse = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('Could not find valid JSON in response');
+        }
+      } catch (jsonError) {
+        console.error('Failed to parse Gemini JSON response:', jsonError);
+        throw new Error('Failed to parse crop recommendations from AI');
+      }
+      
+      setRecommendations(jsonResponse);
     } catch (err) {
-      console.error('Error fetching recommendations:', err);
-      setLoadingRecommendations(false);
+      setAiError(`Failed to get recommendations: ${err.message}`);
+      console.error('recommendation error:', err);
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -113,7 +180,14 @@ export default function SoilHealthDashboard() {
   };
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+  const SUITABILITY_COLORS = {
+    high: '#4CAF50',
+    medium: '#FFC107',
+    low: '#F44336'
+  };
 
+  // Define all data variables that depend on the data state
+  // This ensures they're defined before they're used in the JSX
   const cropData = data ? [
     { name: 'Kharif', value: data.kharif },
     { name: 'Rabi', value: data.rabi },
@@ -136,17 +210,68 @@ export default function SoilHealthDashboard() {
   ] : [];
 
   const moistureData = data ? [
-    { name: 'Root Moisture', value: data.root_level_surface_moisture * 100 },
-    { name: 'Upper Moisture', value: data.upper_level_surface_moisture * 100 },
+    { name: 'Root Level', value: data.root_level_surface_moisture * 100 },
+    { name: 'Upper Level', value: data.upper_level_surface_moisture * 100 },
     { name: 'Surface Runoff', value: data.surface_runoff * 100 },
     { name: 'Evapotranspiration', value: data.evapotranspiration },
   ] : [];
 
   const climateData = data ? [
-    { name: 'Temperature', value: data.avg_temperature },
-    { name: 'Humidity', value: data.avg_humidity },
-    { name: 'Rainfall', value: data.avg_rainfall },
+    { name: 'Temperature (°C)', value: data.avg_temperature },
+    { name: 'Humidity (%)', value: data.avg_humidity },
+    { name: 'Rainfall (mm)', value: data.avg_rainfall },
   ] : [];
+
+  // Display a welcome message or instructions when no data is loaded yet
+  if (!data && !loading && !error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h1 className="text-3xl font-bold text-gray-800 mb-4">Soil Health Dashboard</h1>
+            <p className="text-lg text-gray-600 mb-6">Enter coordinates to fetch soil health data.</p>
+            
+            <form onSubmit={handleSubmit} className="flex flex-wrap gap-4">
+              <div className="flex flex-col">
+                <label htmlFor="lat" className="text-sm font-medium text-gray-600 mb-1">Latitude</label>
+                <input
+                  type="number"
+                  id="lat"
+                  name="lat"
+                  step="any"
+                  value={inputCoordinates.lat}
+                  onChange={handleInputChange}
+                  className="border rounded p-2 w-40"
+                  required
+                />
+              </div>
+              <div className="flex flex-col">
+                <label htmlFor="lon" className="text-sm font-medium text-gray-600 mb-1">Longitude</label>
+                <input
+                  type="number"
+                  id="lon"
+                  name="lon"
+                  step="any"
+                  value={inputCoordinates.lon}
+                  onChange={handleInputChange}
+                  className="border rounded p-2 w-40"
+                  required
+                />
+              </div>
+              <div className="flex items-end">
+                <button 
+                  type="submit" 
+                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                >
+                  Fetch Data
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -171,6 +296,7 @@ export default function SoilHealthDashboard() {
     </div>
   );
 
+  // Only render the dashboard if data exists
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
@@ -267,11 +393,11 @@ export default function SoilHealthDashboard() {
               </div>
               <div className="h-36">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={climateData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
+                  <BarChart data={climateData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} height={40} />
-                    <YAxis tick={{ fontSize: 10 }} width={40} />
-                    <Tooltip formatter={(value, name) => [`${value}${name === 'Temperature' ? '°C' : name === 'Humidity' ? '%' : 'mm'}`, name]} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
                     <Bar dataKey="value" fill="#8884d8" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -284,32 +410,19 @@ export default function SoilHealthDashboard() {
               <Sprout className="text-green-600 mr-2" size={24} />
               <h2 className="text-xl font-bold text-gray-800">Vegetation & Moisture</h2>
             </div>
-            <div className="space-y-3 h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={moistureData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={50} />
-                  <YAxis tick={{ fontSize: 10 }} width={40} />
-                  <Tooltip formatter={(value) => [`${value}${value < 10 ? '%' : ''}`]} />
-                  <Bar dataKey="value" fill="#36A2EB" />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="space-y-3">
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={moistureData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#36A2EB" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
-        </div>
-
-        {/* Weather Chart from Flask */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center mb-4">
-            <Wind className="text-blue-600 mr-2" size={24} />
-            <h2 className="text-xl font-bold text-gray-800">Weather Forecast</h2>
-          </div>
-          <div className="w-full h-96 overflow-hidden">
-            <iframe 
-              src={`http://127.0.0.1:7000/${data.weather_graph_path}`} 
-              className="w-full h-full border-0"
-              title="Weather Forecast"
-            />
           </div>
         </div>
 
@@ -351,7 +464,7 @@ export default function SoilHealthDashboard() {
             </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={ndviData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                <BarChart data={ndviData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />
@@ -384,62 +497,8 @@ export default function SoilHealthDashboard() {
           </div>
         </div>
 
-        {/* AI Recommendations */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center mb-4">
-            <BookOpen className="text-green-600 mr-2" size={24} />
-            <h2 className="text-xl font-bold text-gray-800">AI Crop Recommendations</h2>
-          </div>
-          
-          {loadingRecommendations ? (
-            <div className="flex justify-center items-center h-40">
-              <div className="w-10 h-10 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="ml-2 text-green-600">Analyzing soil data for recommendations...</p>
-            </div>
-          ) : recommendations ? (
-            <div>
-              <h3 className="font-semibold text-lg mb-3 text-gray-700">Recommended Crops</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {recommendations.recommendedCrops.map((crop, index) => (
-                  <div key={index} className={`p-4 rounded-lg border-l-4 ${
-                    crop.suitability === 'High' 
-                      ? 'border-green-500 bg-green-50' 
-                      : crop.suitability === 'Medium'
-                        ? 'border-yellow-500 bg-yellow-50'
-                        : 'border-red-500 bg-red-50'
-                  }`}>
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-gray-800">{crop.name}</h4>
-                      <span className={`text-xs font-medium px-2 py-1 rounded ${
-                        crop.suitability === 'High' 
-                          ? 'bg-green-200 text-green-800' 
-                          : crop.suitability === 'Medium'
-                            ? 'bg-yellow-200 text-yellow-800'
-                            : 'bg-red-200 text-red-800'
-                      }`}>
-                        {crop.suitability}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-2">{crop.reason}</p>
-                    <p className="text-xs text-gray-500 mt-1">Season: {crop.growingSeason}</p>
-                  </div>
-                ))}
-              </div>
-              
-              <h3 className="font-semibold text-lg mb-3 text-gray-700">Soil Health Improvements</h3>
-              <ul className="list-disc pl-5 space-y-1">
-                {recommendations.soilHealthImprovements.map((tip, index) => (
-                  <li key={index} className="text-gray-700">{tip}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="text-gray-600">Unable to generate recommendations at this time.</p>
-          )}
-        </div>
-
         {/* Soil Analysis Summary */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center mb-4">
             <Lock className="text-blue-600 mr-2" size={24} />
             <h2 className="text-xl font-bold text-gray-800">Soil Analysis Summary</h2>
@@ -472,13 +531,108 @@ export default function SoilHealthDashboard() {
               and vegetation fraction of {data.vegetation_fraction}%, the overall vegetation health is 
               {data.filtered_ndvi > 70 ? " good" : data.filtered_ndvi > 50 ? " moderate" : " poor"}.
             </p>
-            
-            <p className="text-gray-700 mt-3">
-              <strong>Surface Moisture:</strong> Root level surface moisture ({data.root_level_surface_moisture * 100}%) and 
-              upper level surface moisture ({data.upper_level_surface_moisture * 100}%) indicate
-              {(data.root_level_surface_moisture + data.upper_level_surface_moisture) > 0.3 ? " adequate" : " low"} soil moisture content.
-            </p>
           </div>
+        </div>
+
+        {/* AI Crop Recommendations */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center mb-4">
+            <Brain className="text-indigo-600 mr-2" size={24} />
+            <h2 className="text-xl font-bold text-gray-800">Crop Recommendations</h2>
+          </div>
+          
+          {aiLoading && (
+            <div className="flex items-center justify-center p-8">
+              <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="ml-2 text-indigo-500">Analyzing soil data...</p>
+            </div>
+          )}
+          
+          {aiError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+              <div className="flex items-center mb-2">
+                <AlertTriangle size={20} className="text-red-500 mr-2" />
+                <p className="font-medium text-red-700">Error Getting Recommendations</p>
+              </div>
+              <p className="text-red-600">{aiError}</p>
+              <button 
+                className="mt-4 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                onClick={() => data && fetchCropRecommendations(data)}
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+          
+          {recommendations && !aiLoading && !aiError && (
+            <div className="space-y-6">
+              {/* Recommended Crops */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Recommended Crops</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {recommendations.recommendedCrops.map((crop, index) => (
+                    <div key={index} className="border rounded-lg overflow-hidden">
+                      <div 
+                        className="p-3 text-white font-medium" 
+                        style={{ backgroundColor: SUITABILITY_COLORS[crop.suitability.toLowerCase()] }}
+                      >
+                        {crop.name} - {crop.suitability} Suitability
+                      </div>
+                      <div className="p-3">
+                        <ul className="list-disc pl-5 space-y-1">
+                          {crop.reasons.map((reason, i) => (
+                            <li key={i} className="text-sm text-gray-700">{reason}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Farming Practices */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Recommended Farming Practices</h3>
+                  <ul className="list-disc pl-5 space-y-2">
+                    {recommendations.farmingPractices.map((practice, index) => (
+                      <li key={index} className="text-gray-700">{practice}</li>
+                    ))}
+                  </ul>
+                </div>
+                
+                {/* Soil Improvements */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Soil Improvement Recommendations</h3>
+                  <ul className="list-disc pl-5 space-y-2">
+                    {recommendations.soilImprovements.map((improvement, index) => (
+                      <li key={index} className="text-gray-700">{improvement}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              
+              {/* Risk Factors */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Risk Factors to Watch</h3>
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <ul className="list-disc pl-5 space-y-2">
+                    {recommendations.riskFactors.map((risk, index) => (
+                      <li key={index} className="text-gray-700">{risk}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              
+              {/* Overall Insights */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Analysis Insights</h3>
+                <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-md">
+                  <p className="text-gray-700">{recommendations.insights}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

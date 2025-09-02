@@ -6,3 +6,13 @@ Frontend/my-app/node_modules/
 __pycache__/
 *.py[cod]
 Backend/env/
+.env
+croprec.zip
+geodata.py
+market_flask_8.14.40_PM.py
+market_lat_long.csv
+requirements.txt
+gis_data
+market_data
+croprec
+output

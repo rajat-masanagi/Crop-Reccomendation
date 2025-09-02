@@ -12,6 +12,7 @@ from datetime import datetime
 import matplotlib.ticker as ticker
 from textwrap import dedent
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 # Set plot style for better visualization
 plt.style.use('ggplot')
@@ -67,7 +68,7 @@ def get_market(user_lat=None, user_lon=None):
     all_crops_forecast = {}
 
     # Create output directory for saving plots
-    output_dir = "/Users/admin/Workspace/Crop Reccomendation/Frontend/my-app/public"
+    output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"Starting analysis of {len(crop_files)} crops...")
@@ -262,13 +263,158 @@ def get_market(user_lat=None, user_lon=None):
     summary_df.to_csv(summary_csv_path, index=False)
     print(f"\nComplete analysis saved to {summary_csv_path}")
 
-    # (The rest of your visualization and summary-building code remains unchanged.)
-    # For brevity, we assume the remaining code (plot generation and building summary strings)
-    # is appended here, and the final output dictionary is built as before.
-    
-    # ... [Additional visualization and summary code] ...
-
-    # Example: add overall summary key (you can modify as needed)
+    if crop_summaries:
+        # Generate visualizations
+        plt.figure(figsize=(14, 8))
+        viz_df = summary_df[["Crop", "Current Price", "Forecasted Price (Next Month)"]]
+        viz_df = viz_df.sort_values(by="Current Price", ascending=False)
+        viz_df.plot(x="Crop", y=["Current Price", "Forecasted Price (Next Month)"], 
+                    kind="bar", color=["#1f77b4", "#d62728"], alpha=0.7, ax=plt.gca())
+        plt.title("Current vs. Forecasted Prices (Next Month)", fontsize=16, fontweight='bold')
+        plt.ylabel("Price (Rs./Quintal)", fontsize=12)
+        plt.xlabel("", fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        plt.grid(axis='y', alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, "price_comparison.png"), dpi=300)
+        plt.close()
+        
+        if price_change_data:
+            trend_df = pd.DataFrame(price_change_data)
+            trend_df = trend_df.sort_values(by="12 Months", ascending=False)
+            plt.figure(figsize=(14, 8))
+            trend_df.plot(x="Crop", y=["1 Month", "6 Months", "12 Months"], 
+                          kind="bar", color=["#1f77b4", "#ff7f0e", "#2ca02c"], ax=plt.gca())
+            plt.title("Forecasted Price Change by Timeframe", fontsize=16, fontweight='bold')
+            plt.ylabel("Price Change (%)", fontsize=12)
+            plt.xlabel("", fontsize=12)
+            plt.axhline(y=0, color='r', linestyle='-', alpha=0.3)
+            plt.xticks(rotation=45, ha='right')
+            plt.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(os.path.join(output_dir, "price_trends.png"), dpi=300)
+            plt.close()
+        
+        plt.figure(figsize=(14, 8))
+        top_crops = summary_df.sort_values(by="Long Term Trend (%)", ascending=False).head(5)["Crop"].tolist()
+        for crop in top_crops:
+            if crop in all_crops_forecast:
+                data = all_crops_forecast[crop]
+                current = data['current_price']
+                normalized_forecast = [(price/current)*100 for price in data['prices']]
+                plt.plot(data['dates'], normalized_forecast, label=crop, linewidth=2)
+        plt.title("Top 5 Crops - Comparative Price Forecast (% Change)", fontsize=16, fontweight='bold')
+        plt.ylabel("Price (% of Current)", fontsize=12)
+        plt.xlabel("Date", fontsize=12)
+        plt.grid(True, alpha=0.3)
+        plt.legend(loc="best")
+        plt.gcf().autofmt_xdate()
+        plt.axhline(y=100, color='black', linestyle='--', alpha=0.5, label='Current Price Level')
+        plt.gca().yaxis.set_major_formatter(ticker.PercentFormatter())
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, "comparative_forecast.png"), dpi=300)
+        plt.close()
+        
+        plt.figure(figsize=(12, 8))
+        growth_df = summary_df.dropna(subset=["Growth Duration (Months)"])
+        if not growth_df.empty:
+            plt.scatter(growth_df["Growth Duration (Months)"], 
+                        growth_df["Forecasted Price (Next Month)"],
+                        s=100, alpha=0.7)
+            for idx, row in growth_df.iterrows():
+                plt.annotate(row["Crop"], 
+                             (row["Growth Duration (Months)"], row["Forecasted Price (Next Month)"]),
+                             xytext=(5, 5), textcoords="offset points")
+            plt.title("Relationship Between Growth Duration and Price", fontsize=16, fontweight='bold')
+            plt.xlabel("Growth Duration (Months)", fontsize=12)
+            plt.ylabel("Forecasted Price (Rs./Quintal)", fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(os.path.join(output_dir, "growth_vs_price.png"), dpi=300)
+            plt.close()
+        
+        # Executive summary values
+        best_price = summary_df.loc[summary_df["Forecasted Price (Next Month)"].idxmax()]
+        worst_price = summary_df.loc[summary_df["Forecasted Price (Next Month)"].idxmin()]
+        output['best_price'] = best_price.to_dict()
+        output['worst_price'] = worst_price.to_dict()
+        
+        best_trend = summary_df.loc[summary_df["Long Term Trend (%)"].idxmax()]
+        worst_trend = summary_df.loc[summary_df["Long Term Trend (%)"].idxmin()]
+        output['best_trend'] = best_trend.to_dict()
+        output['worst_trend'] = worst_trend.to_dict()
+        
+        most_volatile = summary_df.loc[summary_df["Price Volatility (%)"].idxmax()]
+        least_volatile = summary_df.loc[summary_df["Price Volatility (%)"].idxmin()]
+        output['most_volatile'] = most_volatile.to_dict()
+        output['least_volatile'] = least_volatile.to_dict()
+        
+        # Build crop analysis and recommendation strings outside of f-string expressions
+        crop_analyses = []
+        recommendations = []
+        for i, (_, crop_data) in enumerate(summary_df.iterrows(), 1):
+            analysis_text = (
+                f"{i}. CROP ANALYSIS: {crop_data['Crop']}\n"
+                f"{'=' * 50}\n\n"
+                f"CURRENT MARKET:\n"
+                f"- Current Price: ₹{crop_data['Current Price']:.2f} per quintal\n"
+                f"- Historical Average: ₹{crop_data['Avg Price']:.2f} per quintal\n"
+                f"- Price Range: ₹{crop_data['Min Price']:.2f} to ₹{crop_data['Max Price']:.2f}\n"
+                f"- Price Volatility: {crop_data['Price Volatility (%)']:.2f}%\n"
+                f"- Year-over-Year Change: {crop_data['YoY Change (%)']:+.2f}%\n\n"
+                f"GROWING SEASON:\n"
+            )
+            if pd.notna(crop_data['Sowing Month']) and pd.notna(crop_data['Harvest Month']):
+                analysis_text += (
+                    f"- Estimated Sowing Season: {crop_data['Sowing Month']}\n"
+                    f"- Estimated Harvest Season: {crop_data['Harvest Month']}\n"
+                    f"- Estimated Growth Duration: {crop_data['Growth Duration (Months)']:.1f} months\n\n"
+                )
+            else:
+                analysis_text += "- Seasonal data not available\n\n"
+            analysis_text += (
+                f"PRICE FORECAST:\n"
+                f"- Next Month: ₹{crop_data['Forecasted Price (Next Month)']:.2f} ({crop_data['Short Term Trend (%)']:+.2f}%)\n"
+                f"- 6 Months: ₹{crop_data['Forecasted Price (6 Months)']:.2f} ({crop_data['Mid Term Trend (%)']:+.2f}%)\n"
+                f"- 1 Year: ₹{crop_data['Forecasted Price (1 Year)']:.2f} ({crop_data['Long Term Trend (%)']:+.2f}%)"
+            )
+            crop_analyses.append(dedent(analysis_text))
+            
+            # Build recommendation text using if/elif logic
+            if crop_data['Long Term Trend (%)'] > 10:
+                rec_text = (
+                    f"- STRONG GROWTH POTENTIAL: {crop_data['Crop']} prices are expected to rise significantly.\n"
+                    "  Consider increasing cultivation area for future seasons."
+                )
+            elif crop_data['Long Term Trend (%)'] > 5:
+                rec_text = (
+                    f"- MODERATE GROWTH POTENTIAL: {crop_data['Crop']} shows positive price trends.\n"
+                    "  Current cultivation levels recommended with possible slight increase."
+                )
+            elif crop_data['Long Term Trend (%)'] > 0:
+                rec_text = (
+                    f"- STABLE OUTLOOK: {crop_data['Crop']} prices should remain relatively stable.\n"
+                    "  Maintain current cultivation approach."
+                )
+            elif crop_data['Long Term Trend (%)'] > -5:
+                rec_text = (
+                    f"- SLIGHT DECLINE EXPECTED: {crop_data['Crop']} prices may decrease slightly.\n"
+                    "  Consider diversifying to other crops if possible."
+                )
+            else:
+                rec_text = (
+                    f"- SIGNIFICANT DECLINE EXPECTED: {crop_data['Crop']} prices likely to fall substantially.\n"
+                    "  Recommend reducing cultivation area and exploring alternatives."
+                )
+            recommendations.append(dedent("RECOMMENDATION:\n" + rec_text))
+        
+        output['crop_analysis'] = crop_analyses
+        output['recommendation'] = recommendations
+        
+        avg_trend = summary_df["Long Term Trend (%)"].mean()
+        rising_crops = summary_df[summary_df["Long Term Trend (%)"] > 0]["Crop"].tolist()
+        falling_crops = summary_df[summary_df["Long Term Trend (%)"] < 0]["Crop"].tolist()
+        
     avg_trend = summary_df["Long Term Trend (%)"].mean()
     rising_crops = summary_df[summary_df["Long Term Trend (%)"] > 0]["Crop"].tolist()
     falling_crops = summary_df[summary_df["Long Term Trend (%)"] < 0]["Crop"].tolist()
@@ -288,6 +434,8 @@ def get_market(user_lat=None, user_lon=None):
 
 # Create Flask app
 app = Flask(__name__)
+
+CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 @app.route('/get_market', methods=['GET'])
 def market_insight():
