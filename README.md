@@ -102,7 +102,7 @@ GFarm stands out by combining AI, GIS, and market insights with multilingual voi
 
 ### System Architecture
 
-<img width="1574" height="511" alt="image" src="https://github.com/user-attachments/assets/c26f4e0a-426f-427c-850d-5fb6f77a0379" />
+<img width="1628" height="742" alt="Untitled" src="https://github.com/user-attachments/assets/40810beb-c68b-482c-b675-4979fc991edc" />
 
 
 ### Data Flow
