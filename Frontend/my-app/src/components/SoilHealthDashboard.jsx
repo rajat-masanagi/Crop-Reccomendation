@@ -28,7 +28,9 @@ export default function SoilHealthDashboard() {
     setRecommendations(null);
     setAiError(null);
     try {
-      const response = await fetch(`http://127.0.0.1:7000/get_data?lat=${lat}&lon=${lon}`);
+      // const response = await fetch(`http://127.0.0.1:7100/get_data?lat=${lat}&lon=${lon}`);
+      const response = await fetch(`http://192.168.29.120:7100/get_data?lat=${lat}&lon=${lon}`);
+
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
@@ -50,14 +52,14 @@ export default function SoilHealthDashboard() {
     setAiError(null);
     
     try {
-      const apiKey =""; // Ensure you have your API key in .env file
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY; // Ensure you have your API key in .env file
       if (!apiKey) {
         throw new Error('Gemini API key not found. Please check your .env file.');
       }
       
       // Prepare prompt for Gemini
       const prompt = `
-        Analyze this soil data and provide crop recommendations with detailed insights:
+        Analyze this soil data and provide crop recommendations with detailed insights and give output completely in hindi:
         
         Soil Type: ${soilData.soil_type}
         Soil Depth: ${soilData.soil_depth}

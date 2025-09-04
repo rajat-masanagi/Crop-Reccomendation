@@ -18,7 +18,7 @@ import os
 import re
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 def get_raster_values(lat, lon, raster_paths, default_crs="EPSG:32643"):
     results = {}
@@ -367,7 +367,7 @@ def get_data():
     return jsonify(raster_values)
 
 if __name__ == '__main__':
-    app.run(debug=True,port=7000)
+    app.run(host="0.0.0.0",debug=True,port=7100)
 
 
 
